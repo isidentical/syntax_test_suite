@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Generator, List, Literal, Optional, Union, cast
+from typing import Generator, List, Literal, Optional, Tuple, Union, cast
 from urllib.request import Request, urlopen, urlretrieve
 
 PYPI_INSTANCE = "https://pypi.org/pypi"
@@ -75,13 +75,15 @@ def download_and_extract(
     return directory / result_dir
 
 
-def get_package(package: str, directory: Path, version: Optional[str] = None):
+def get_package(
+    package: str, directory: Path, version: Optional[str] = None
+) -> Tuple[str, Optional[Path]]:
     try:
-        return download_and_extract(package, directory, version)
+        return package, download_and_extract(package, directory, version)
     except Exception as e:
         print(f"Caught an exception while downloading {package}.")
         print(traceback.print_exc(e))
-        return None
+        return package, None
 
 
 def get_top_packages(days: Days) -> List[str]:
@@ -91,6 +93,27 @@ def get_top_packages(days: Days) -> List[str]:
     return [package["project"] for package in result["rows"]]
 
 
+def dump_config(directory: Path, values: List[str]):
+    with open(directory / "info.json", "w") as f:
+        json.dump(values, f)
+
+
+def read_config(directory: Path) -> List[str]:
+    if (pkg_config := directory / "info.json").exists():
+        with open(pkg_config) as f:
+            cache = json.load(f)
+        return cache
+    else:
+        return []
+
+
+def filter_already_downloaded(
+    directory: Path, packages: List[str]
+) -> List[str]:
+    cache = read_config(directory)
+    return [package for package in packages if package not in cache]
+
+
 def download_top_packages(
     directory: Path,
     days: Days = 365,
@@ -98,19 +121,35 @@ def download_top_packages(
     limit: slice = slice(None),
 ) -> Generator[Path, None, None]:
     assert directory.exists()
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        bound_downloader = partial(get_package, directory=directory)
-        for package in executor.map(
-            bound_downloader, get_top_packages(days)[limit]
-        ):
-            print(f"Package {package} created.")
+    if not (directory / "info.json").exists():
+        dump_config(directory, [])
+
+    packages = get_top_packages(days)[limit]
+    packages = filter_already_downloaded(directory, packages)
+    caches = []
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            bound_downloader = partial(get_package, directory=directory)
+            for package, package_directory in executor.map(
+                bound_downloader, packages
+            ):
+                if package_directory is not None:
+                    caches.append(package)
+                print(f"Package {package_directory} is created for {package}.")
+    finally:
+        dump_config(directory, read_config(directory) + caches)
 
 
 def main():
     parser = ArgumentParser()
     parser.add_argument("directory", type=Path)
-    parser.add_argument("--days", choices=(30, 365), type=int)
-    parser.add_argument("--workers", type=int)
+    parser.add_argument("--days", choices=(30, 365), type=int, default=30)
+    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument(
+        "--limit",
+        type=lambda limit: slice(*map(int, limit.split(":"))),
+        default=slice(0, 10),
+    )
     options = parser.parse_args()
     download_top_packages(**vars(options))
 
