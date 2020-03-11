@@ -1,5 +1,6 @@
 import ast
 import sys
+import tokenize
 import traceback
 import warnings
 from argparse import ArgumentParser
@@ -22,7 +23,9 @@ class Report:
 
 
 def test_package_impl(file: Path) -> List[Any]:
-    return []
+    reports = []
+    # IMPLEMENT HERE
+    return reports
 
 
 def test_package_files(directory: Path) -> List[Report]:
@@ -36,7 +39,6 @@ def test_package_files(directory: Path) -> List[Report]:
 
 def test_package(directory: Path) -> Tuple[str, List[Report]]:
     name = directory.name.split("-", -1)[0]
-    print(f"Parsing {name}")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         try:
@@ -52,12 +54,13 @@ def test_all(directory: Path, workers: int = 20):
         for package, reports, errors in executor.map(
             test_package, directory.iterdir()
         ):
-            print("=" * 50)
-            print("Package:", package)
-            for report in reports:
-                print(report)
-            if errors:
-                print(f"While testing an exception caught: ", errors)
+            if reports or errors:
+                print("=" * 50)
+                print("Package:", package)
+                for report in reports:
+                    print(report)
+                if errors:
+                    print(f"While testing an exception caught: ", errors)
 
 
 def main():

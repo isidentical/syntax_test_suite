@@ -69,6 +69,7 @@ def download_and_extract(
     print(f"Downloading {package}.")
     local_file, _ = urlretrieve(source, directory / f"{package}-src")
     with get_archive_manager(local_file) as archive:
+        print(f"Extracting {package}")
         archive.extractall(path=directory)
         result_dir = get_first_archive_member(archive)
     os.remove(local_file)
@@ -135,7 +136,9 @@ def download_top_packages(
             ):
                 if package_directory is not None:
                     caches.append(package)
-                print(f"Package {package_directory} is created for {package}.")
+                    print(
+                        f"Package {package_directory} is created for {package}."
+                    )
     finally:
         dump_config(directory, read_config(directory) + caches)
 
