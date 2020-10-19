@@ -4,10 +4,10 @@ import tokenize
 import traceback
 import warnings
 from argparse import ArgumentParser
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 
 
 def ast_unparse_c(source):
@@ -37,7 +37,7 @@ def test_package_files(directory: Path) -> List[Report]:
     return reports
 
 
-def test_package(directory: Path) -> Tuple[str, List[Report]]:
+def test_package(directory: Path) -> Tuple[str, List[Report], Optional[str]]:
     name = directory.name.split("-", -1)[0]
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -51,9 +51,9 @@ def test_package(directory: Path) -> Tuple[str, List[Report]]:
 
 def test_all(directory: Path, workers: int = 20):
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        for package, reports, errors in executor.map(
-            test_package, directory.iterdir()
-        ):
+        futures = {executor.submit(test_package, d) for d in directory.iterdir()}
+        for future in as_completed(futures):
+            package, reports, errors = future.result()
             if reports or errors:
                 print("=" * 50)
                 print("Package:", package)
