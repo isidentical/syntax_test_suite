@@ -83,7 +83,7 @@ def get_package(
         return package, download_and_extract(package, directory, version)
     except Exception as e:
         print(f"Caught an exception while downloading {package}.")
-        print(traceback.print_exc(e))
+        traceback.print_exc()
         return package, None
 
 
