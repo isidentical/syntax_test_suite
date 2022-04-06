@@ -8,14 +8,13 @@ from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Generator, List, Literal, Optional, Tuple, Union, cast
+from typing import Generator, List, Optional, Tuple, Union, cast
 from urllib.request import Request, urlopen, urlretrieve
 
 PYPI_INSTANCE = "https://pypi.org/pypi"
-PYPI_TOP_PACKAGES = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-{days}-days.json"
+PYPI_TOP_PACKAGES = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json"
 
 ArchiveKind = Union[tarfile.TarFile, zipfile.ZipFile]
-Days = Union[Literal[30], Literal[365]]
 
 
 def get_package_source(package: str, version: Optional[str] = None) -> str:
@@ -87,8 +86,8 @@ def get_package(
         return package, None
 
 
-def get_top_packages(days: Days) -> List[str]:
-    with urlopen(PYPI_TOP_PACKAGES.format(days=days)) as page:
+def get_top_packages() -> List[str]:
+    with urlopen(PYPI_TOP_PACKAGES.format()) as page:
         result = json.load(page)
 
     return [package["project"] for package in result["rows"]]
@@ -117,7 +116,6 @@ def filter_already_downloaded(
 
 def download_top_packages(
     directory: Path,
-    days: Days = 365,
     workers: int = 24,
     limit: slice = slice(None),
 ) -> Generator[Path, None, None]:
@@ -125,7 +123,7 @@ def download_top_packages(
     if not (directory / "info.json").exists():
         dump_config(directory, [])
 
-    packages = get_top_packages(days)[limit]
+    packages = get_top_packages()[limit]
     packages = filter_already_downloaded(directory, packages)
     caches = []
     try:
@@ -146,7 +144,6 @@ def download_top_packages(
 def main():
     parser = ArgumentParser()
     parser.add_argument("directory", type=Path)
-    parser.add_argument("--days", choices=(30, 365), type=int, default=30)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument(
         "--limit",
